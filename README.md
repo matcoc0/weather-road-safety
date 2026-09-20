@@ -1,4 +1,4 @@
-WEATHER ROAD CAFETY CLOUD ETL PROJECT
+WEATHER ROAD SAFETY CLOUD ETL PROJECT
 
 ```bash
 cp config/project.example.json config/project.local.json

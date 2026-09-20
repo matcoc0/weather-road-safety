@@ -25,3 +25,7 @@ config/project.local.json
 # Secrets / credentials
 *.json.key
 service-account*.json
+
+# testing
+code.sh
+code.txt
