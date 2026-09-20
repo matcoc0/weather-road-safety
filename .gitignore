@@ -18,3 +18,10 @@ __pycache__/
 .env
 .DS_Store
 *.pyc
+
+# Local project configuration
+config/project.local.json
+
+# Secrets / credentials
+*.json.key
+service-account*.json

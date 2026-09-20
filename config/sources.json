@@ -1,0 +1,8 @@
+{
+  "baac": {
+    "dataset_api": "https://www.data.gouv.fr/api/1/datasets/bases-de-donnees-annuelles-des-accidents-corporels-de-la-circulation-routiere-annees-de-2005-a-2024/"
+  },
+  "weather": {
+    "dataset_api": "https://www.data.gouv.fr/api/1/datasets/donnees-climatologiques-de-base-horaires/"
+  }
+}

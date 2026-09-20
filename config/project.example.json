@@ -1,0 +1,12 @@
+{
+  "gcp": {
+    "project_id": "",
+    "region": "europe-west9",
+    "bucket": ""
+  },
+  "bigquery": {
+    "silver_dataset": "road_safety_silver",
+    "gold_dataset": "road_safety_gold",
+    "control_dataset": "road_safety_control"
+  }
+}
