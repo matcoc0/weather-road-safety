@@ -1,8 +1,47 @@
 from pathlib import Path
-
+from google.api_core.exceptions import NotFound
 from google.cloud import bigquery
 
 from weather_road_safety.config import (SQL_DIR, load_project_config)
+
+def table_exists(
+    client: bigquery.Client,
+    table_id: str,
+) -> bool:
+    try:
+        client.get_table(table_id)
+        return True
+    except NotFound:
+        return False
+
+
+def initialize_target(
+    client: bigquery.Client,
+    staging_table: str,
+    target_table: str,
+) -> None:
+    print(f"Initializing target: {target_table}")
+
+    job = client.copy_table(staging_table, target_table)
+    job.result()
+    table = client.get_table(target_table)
+
+    print(f"Initialized {table.num_rows:,} rows into {target_table}")
+
+
+def merge_target(
+    client: bigquery.Client,
+    sql_path: Path,
+    parameters: dict[str, str],
+) -> None:
+    sql = sql_path.read_text(encoding="utf-8").format(**parameters)
+
+    print(f"Merging: {sql_path.name}")
+
+    job = client.query(sql)
+    job.result()
+
+    print(f"MERGE completed - {job.num_dml_affected_rows or 0:,} row(s) affected")
 
 def get_client() -> tuple[bigquery.Client, dict]:
     config = load_project_config()
@@ -84,24 +123,44 @@ def main(year: int, department: str) -> None:
         create_dataset(client=client, dataset_name=dataset_name, location=location)
 
     # load Silver accidents
-    accidents_uri = (f"gs://{bucket}/silver/accidents/year={year}/department={department}/accidents.parquet")
-    accidents_table = (f"{project_id}.{silver_dataset}.accidents")
+    parameters = {
+        "project_id": project_id,
+        "silver_dataset": silver_dataset,
+        "gold_dataset": gold_dataset,
+    }
 
-    load_parquet(client=client, source_uri=accidents_uri, table_id=accidents_table)
+    accidents_uri = (f"gs://{bucket}/silver/accidents/year={year}/department={department}/accidents.parquet")
+    accidents_staging_table = (f"{project_id}.{silver_dataset}.stg_accidents")
+    accidents_target_table = (f"{project_id}.{silver_dataset}.accidents")
+
+    load_parquet(client=client, source_uri=accidents_uri, table_id=accidents_staging_table)
+
+    if table_exists(client,accidents_target_table,):
+        merge_target(client=client, sql_path=(SQL_DIR / "incremental" / "merge_accidents.sql"),
+            parameters=parameters,
+        )
+    else:
+        initialize_target(client=client, staging_table=accidents_staging_table,
+            target_table=accidents_target_table,
+        )
 
     # load Silver weather
     weather_uri = (f"gs://{bucket}/silver/weather/year={year}/department={department}/weather.parquet")
-    weather_table = (f"{project_id}.{silver_dataset}.weather")
+    weather_staging_table = (f"{project_id}.{silver_dataset}.stg_weather")
+    weather_target_table = (f"{project_id}.{silver_dataset}.weather")
 
-    load_parquet(client=client, source_uri=weather_uri, table_id=weather_table)
+    load_parquet(client=client, source_uri=weather_uri, table_id=weather_staging_table)
 
     # build Gold
-    execute_sql_file(
-        client=client,
-        sql_path=SQL_DIR / "gold" / "accident_weather.sql",
-        parameters={
-            "project_id": project_id,
-            "silver_dataset": silver_dataset,
-            "gold_dataset": gold_dataset,
-        }
+    if table_exists(client, weather_target_table):
+        merge_target(client=client, sql_path=(SQL_DIR / "incremental" / "merge_weather.sql"),
+            parameters=parameters
+        )
+    else:
+        initialize_target(client=client, staging_table=weather_staging_table,
+            target_table=weather_target_table
+        )
+
+    execute_sql_file(client=client,sql_path=(SQL_DIR / "gold"/ "accident_weather.sql"),
+        parameters=parameters
     )
